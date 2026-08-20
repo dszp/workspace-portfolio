@@ -157,15 +157,22 @@ Redacted projects never get a description generated, and no subprocess is ever l
 is tracked in git so the diff of that file is the record of a description actually changing.
 
 It shells out to the [Claude Code CLI](https://claude.com/claude-code) (`claude -p`) once per
-project. Each entry is hash-gated: a description is regenerated only when that project's content
-hash has moved. A run where nothing changed makes **zero** model calls, takes under a tenth of a
-second, and leaves the file byte-identical.
+project. Each entry is gated on a hash of **the prompt's own inputs** — the README and
+`CLAUDE.md` first paragraphs, the `package.json` description, the name, the category, and the
+top-level file names. Nothing else. A description says what a project *is*, and that does not
+change because you made a commit.
+
+That distinction is the difference between a command you can schedule and one you cannot. Gating
+on the project's general content hash instead means every commit rewrites the prose — and so does
+a project decaying from `active` to `stalled` with no content change at all. A run where the
+inputs are untouched makes **zero** model calls, takes under a tenth of a second, and leaves the
+file byte-identical, which is what makes a nightly run cost nothing.
 
 ```toml
 ["some/project"]
 text = "n8n community node that wraps a PBX platform's REST API for workflow use."
 source = "ai"        # "manual" = never regenerate; "redacted" = fixed placeholder
-hash = "sha256:..."
+prompt_hash = "sha256:..."
 ```
 
 Edit any description and set `source = "manual"` and it is never touched again.
@@ -275,7 +282,7 @@ override is a guard people delete.
 ## Development
 
 ```bash
-uv run --with pytest pytest -q      # 195 tests
+uv run --with pytest pytest -q      # 198 tests
 ```
 
 No dependencies to install. The tests build real git repositories in temp directories rather than

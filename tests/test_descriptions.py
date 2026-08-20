@@ -15,7 +15,7 @@ def test_load_descriptions_missing_file_returns_empty(tmp_path):
 def test_save_and_load_round_trip(tmp_path):
     path = tmp_path / "descriptions.toml"
     entries = {
-        "a/b": Description(text="Does a thing.", source="ai", hash="sha256:x"),
+        "a/b": Description(text="Does a thing.", source="ai", prompt_hash="sha256:x"),
         "c/d": Description(text="Owner's own words.", source="manual"),
     }
     save_descriptions(path, entries)
@@ -26,12 +26,12 @@ def test_save_descriptions_orders_by_key_regardless_of_insertion_order(tmp_path)
     a = tmp_path / "a.toml"
     b = tmp_path / "b.toml"
     save_descriptions(a, {
-        "z/last": Description(text="z", source="ai", hash="h"),
-        "a/first": Description(text="a", source="ai", hash="h"),
+        "z/last": Description(text="z", source="ai", prompt_hash="h"),
+        "a/first": Description(text="a", source="ai", prompt_hash="h"),
     })
     save_descriptions(b, {
-        "a/first": Description(text="a", source="ai", hash="h"),
-        "z/last": Description(text="z", source="ai", hash="h"),
+        "a/first": Description(text="a", source="ai", prompt_hash="h"),
+        "z/last": Description(text="z", source="ai", prompt_hash="h"),
     })
     assert a.read_text() == b.read_text()
     assert a.read_text().index('"a/first"') < a.read_text().index('"z/last"')
@@ -39,25 +39,25 @@ def test_save_descriptions_orders_by_key_regardless_of_insertion_order(tmp_path)
 
 def test_save_descriptions_returns_false_when_content_is_unchanged(tmp_path):
     path = tmp_path / "descriptions.toml"
-    entries = {"a/b": Description(text="Same.", source="ai", hash="h")}
+    entries = {"a/b": Description(text="Same.", source="ai", prompt_hash="h")}
     assert save_descriptions(path, entries) is True
     assert save_descriptions(path, dict(entries)) is False
 
 
-def test_manual_source_never_needs_regeneration_even_with_a_drifted_hash():
-    entry = Description(text="Owner tweaked this.", source="manual", hash="sha256:old")
+def test_manual_source_never_needs_regeneration_even_with_a_drifted_prompt():
+    entry = Description(text="Owner tweaked this.", source="manual", prompt_hash="sha256:old")
     assert needs_regeneration(entry, "sha256:new") is False
 
 
 def test_ai_source_needs_regeneration_when_the_hash_has_drifted():
     # Contrasts directly with the manual case above: same shape (an existing
     # entry, a hash that no longer matches), opposite source, opposite result.
-    entry = Description(text="AI wrote this.", source="ai", hash="sha256:old")
+    entry = Description(text="AI wrote this.", source="ai", prompt_hash="sha256:old")
     assert needs_regeneration(entry, "sha256:new") is True
 
 
 def test_ai_source_does_not_need_regeneration_when_the_hash_still_matches():
-    entry = Description(text="AI wrote this.", source="ai", hash="sha256:same")
+    entry = Description(text="AI wrote this.", source="ai", prompt_hash="sha256:same")
     assert needs_regeneration(entry, "sha256:same") is False
 
 

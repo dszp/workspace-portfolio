@@ -89,7 +89,7 @@ def test_roadmap_items_are_reported_separately_from_open_items():
 def test_project_section_shows_description_before_its_stats():
     p = proj("a", category="Cat")
     p["path"] = str(CFG.settings.root.resolve() / "Cat" / "a")
-    descriptions = {"Cat/a": Description(text="Does a specific thing.", source="ai", hash="sha256:x")}
+    descriptions = {"Cat/a": Description(text="Does a specific thing.", source="ai", prompt_hash="sha256:x")}
     out = render(facts(p), CFG, now=NOW, descriptions=descriptions)
     assert "#### a" in out
     tail = out[out.index("#### a"):]

@@ -7,7 +7,9 @@ from pathlib import Path
 
 import scripts.describe as describe_mod
 from scripts.config import load_config
-from scripts.describe import build_prompt, gather_context, run
+from scripts.describe import (
+    build_prompt, description_hash, gather_context, run,
+)
 from scripts.descriptions import (
     Description,
     REDACTED_PLACEHOLDER,
@@ -19,6 +21,12 @@ from scripts.fsutil import atomic_write
 from tests.conftest import cfg_for
 
 
+def phash(record):
+    """The hash the gate will compute for this record — derived, never hardcoded,
+    because the whole point is that it tracks the prompt's inputs."""
+    return description_hash(record, gather_context(Path(record["path"])))
+
+
 def rec(name, path, *, category="Cat", redacted=False, content_hash="sha256:1"):
     return {
         "slug": f"-slug-{category}-{name}",
@@ -28,6 +36,9 @@ def rec(name, path, *, category="Cat", redacted=False, content_hash="sha256:1"):
         "path": None if redacted else str(path),
         "redacted": redacted,
         "content_hash": content_hash,
+        # Present so a test can move it: derived.status is part of content_hash
+        # and must NOT be part of the description hash.
+        "derived": {"status": "active"},
     }
 
 
@@ -59,7 +70,8 @@ def test_a_new_project_with_no_entry_is_generated(tmp_path):
     entries, report = run(facts(p), cfg, {}, generate=gen)
     key = project_key(p, cfg.settings.root.resolve())
     assert report.generated == [key]
-    assert entries[key] == Description(text="Does a specific thing.", source="ai", hash="sha256:1")
+    assert entries[key] == Description(
+        text="Does a specific thing.", source="ai", prompt_hash=phash(p))
     assert len(gen.calls) == 1
 
 
@@ -73,7 +85,7 @@ def test_a_run_with_nothing_new_calls_the_generator_zero_times_and_writes_nothin
     desc_path = tmp_path / "descriptions.toml"
     save_descriptions(desc_path, entries)
 
-    # Second pass: same project, same content_hash, entry already on disk.
+    # Second pass: same project, same prompt inputs, entry already on disk.
     reloaded = load_descriptions(desc_path)
     second_gen = Spy("should never be produced")
     entries2, report2 = run(facts(p), cfg, reloaded, generate=second_gen)
@@ -89,7 +101,7 @@ def test_manual_entry_is_never_regenerated_even_with_a_drifted_hash(tmp_path):
     cfg = cfg_for(tmp_path)
     p = rec("alpha", tmp_path / "Cat" / "alpha", content_hash="sha256:new")
     key = project_key(p, cfg.settings.root.resolve())
-    existing = {key: Description(text="Owner's own words.", source="manual", hash="sha256:old")}
+    existing = {key: Description(text="Owner's own words.", source="manual", prompt_hash="sha256:old")}
     gen = Spy()
     entries, report = run(facts(p), cfg, existing, generate=gen)
     assert report.skipped_manual == [key]
@@ -104,7 +116,7 @@ def test_ai_entry_is_regenerated_when_its_hash_has_drifted(tmp_path):
     cfg = cfg_for(tmp_path)
     p = rec("alpha", tmp_path / "Cat" / "alpha", content_hash="sha256:new")
     key = project_key(p, cfg.settings.root.resolve())
-    existing = {key: Description(text="Stale.", source="ai", hash="sha256:old")}
+    existing = {key: Description(text="Stale.", source="ai", prompt_hash="sha256:old")}
     gen = Spy("Freshly regenerated.")
     entries, report = run(facts(p), cfg, existing, generate=gen)
     assert report.generated == [key]
@@ -118,7 +130,7 @@ def test_redacted_project_gets_the_placeholder_without_calling_the_generator(tmp
     key = project_key(p, cfg.settings.root.resolve())
     gen = Spy()
     entries, report = run(facts(p), cfg, {}, generate=gen)
-    assert entries[key] == Description(text=REDACTED_PLACEHOLDER, source="redacted", hash="sha256:1")
+    assert entries[key] == Description(text=REDACTED_PLACEHOLDER, source="redacted")
     assert report.placeholders == [key]
     assert gen.calls == []
 
@@ -143,7 +155,7 @@ def test_entry_for_a_vanished_project_is_retained_and_marked_stale(tmp_path):
     still_here = rec("here", tmp_path / "Cat" / "here")
     existing = {
         gone_key: Description(text="A description the owner may have hand-written.",
-                               source="manual", hash="sha256:x"),
+                               source="manual", prompt_hash="sha256:x"),
     }
     gen = Spy("Newly generated.")
     entries, report = run(facts(still_here), cfg, existing, generate=gen)
@@ -157,7 +169,7 @@ def test_a_reappearing_project_is_unmarked_stale(tmp_path):
     cfg = cfg_for(tmp_path)
     p = rec("back-again", tmp_path / "Cat" / "back-again")
     key = project_key(p, cfg.settings.root.resolve())
-    existing = {key: Description(text="Still true.", source="ai", hash="sha256:1", stale=True)}
+    existing = {key: Description(text="Still true.", source="ai", prompt_hash=phash(p), stale=True)}
     gen = Spy()
     entries, report = run(facts(p), cfg, existing, generate=gen)
     assert entries[key].stale is False
@@ -185,7 +197,7 @@ def test_all_flag_forces_regeneration_of_an_up_to_date_ai_entry(tmp_path):
     cfg = cfg_for(tmp_path)
     p = rec("alpha", tmp_path / "Cat" / "alpha", content_hash="sha256:same")
     key = project_key(p, cfg.settings.root.resolve())
-    existing = {key: Description(text="Old but hash-matching.", source="ai", hash="sha256:same")}
+    existing = {key: Description(text="Old but prompt-matching.", source="ai", prompt_hash=phash(p))}
     without_all = Spy()
     _, report_default = run(facts(p), cfg, existing, generate=without_all)
     assert report_default.generated == []
@@ -369,3 +381,70 @@ def test_claude_generator_runs_in_an_empty_directory_not_the_repo(monkeypatch, t
     assert cwd.is_dir()
     assert list(cwd.iterdir()) == []           # nothing for claude to read
     assert cwd.resolve() != Path.cwd().resolve()
+
+
+def test_a_commit_alone_does_not_regenerate_a_description(tmp_path):
+    """The defect this gate replaced. `content_hash` includes head sha, the
+    porcelain digest and the derived status, so an ordinary commit — or a
+    project decaying from active to stalled with no content change at all —
+    rewrote prose describing what the project IS. Measured five hours after a
+    full pass: five projects wanted regenerating, four with nothing new to say.
+    """
+    proj_dir = tmp_path / "Cat" / "alpha"
+    proj_dir.mkdir(parents=True)
+    (proj_dir / "README.md").write_text("# alpha\n\nDoes the alpha thing.\n")
+
+    before = rec("alpha", proj_dir, content_hash="sha256:before")
+    key = project_key(before, cfg_for(tmp_path).settings.root.resolve())
+    existing = {key: Description(text="Does the alpha thing.", source="ai",
+                                 prompt_hash=phash(before))}
+
+    # Same project, new commit: content_hash moves, derived status moves,
+    # nothing the description is built from moves.
+    after = rec("alpha", proj_dir, content_hash="sha256:after")
+    after["derived"]["status"] = "stalled"
+
+    gen = Spy("SHOULD NOT RUN")
+    entries, report = run(facts(after), cfg_for(tmp_path), existing, generate=gen)
+
+    assert gen.calls == []
+    assert report.generated == []
+    assert entries[key].text == "Does the alpha thing."
+
+
+def test_editing_the_readme_does_regenerate_it(tmp_path):
+    """The other side. Without this, a gate that never regenerated anything
+    would pass the test above."""
+    proj_dir = tmp_path / "Cat" / "alpha"
+    proj_dir.mkdir(parents=True)
+    (proj_dir / "README.md").write_text("# alpha\n\nDoes the alpha thing.\n")
+
+    before = rec("alpha", proj_dir, content_hash="sha256:same")
+    key = project_key(before, cfg_for(tmp_path).settings.root.resolve())
+    existing = {key: Description(text="Does the alpha thing.", source="ai",
+                                 prompt_hash=phash(before))}
+
+    (proj_dir / "README.md").write_text("# alpha\n\nNow does something else entirely.\n")
+
+    gen = Spy("Now does something else entirely.")
+    entries, report = run(facts(before), cfg_for(tmp_path), existing, generate=gen)
+
+    assert len(gen.calls) == 1
+    assert report.generated == [key]
+    assert entries[key].text == "Now does something else entirely."
+
+
+def test_description_hash_ignores_commit_and_status_but_tracks_the_layout(tmp_path):
+    proj_dir = tmp_path / "p"
+    proj_dir.mkdir()
+    a = rec("p", proj_dir, content_hash="sha256:a")
+    b = rec("p", proj_dir, content_hash="sha256:b")
+    b["derived"]["status"] = "dormant"
+    assert phash(a) == phash(b)
+
+    # Capture BEFORE touching the directory: phash() reads the filesystem, so
+    # recomputing it afterwards on both sides would compare the new layout with
+    # itself and pass no matter what the hash covered.
+    before_layout = phash(a)
+    (proj_dir / "new-thing.py").write_text("x\n")
+    assert phash(a) != before_layout

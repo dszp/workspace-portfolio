@@ -175,8 +175,8 @@ def test_description_shown_under_a_top_desc_rows_row_and_hidden_below_it():
     top = _with_path(proj("top", attention=90), "top")
     bottom = _with_path(proj("bottom", attention=10), "bottom")
     descriptions = {
-        "Cat/top": Description(text="What top does.", source="ai", hash="h"),
-        "Cat/bottom": Description(text="What bottom does.", source="ai", hash="h"),
+        "Cat/top": Description(text="What top does.", source="ai", prompt_hash="h"),
+        "Cat/bottom": Description(text="What bottom does.", source="ai", prompt_hash="h"),
     }
     out = render(facts(top, bottom), cfg, color=False, descriptions=descriptions)
     assert "What top does." in out
@@ -188,8 +188,8 @@ def test_desc_flag_shows_the_description_for_every_visible_row():
     top = _with_path(proj("top", attention=90), "top")
     bottom = _with_path(proj("bottom", attention=10), "bottom")
     descriptions = {
-        "Cat/top": Description(text="What top does.", source="ai", hash="h"),
-        "Cat/bottom": Description(text="What bottom does.", source="ai", hash="h"),
+        "Cat/top": Description(text="What top does.", source="ai", prompt_hash="h"),
+        "Cat/bottom": Description(text="What bottom does.", source="ai", prompt_hash="h"),
     }
     out = render(facts(top, bottom), cfg, color=False, descriptions=descriptions, show_desc=True)
     assert "What top does." in out
@@ -199,7 +199,7 @@ def test_desc_flag_shows_the_description_for_every_visible_row():
 def test_description_is_wrapped_and_indented_within_the_80_column_budget():
     p = _with_path(proj("wide", attention=90), "wide")
     long_text = "This project does a great many specific and concrete things " * 3
-    descriptions = {"Cat/wide": Description(text=long_text.strip(), source="ai", hash="h")}
+    descriptions = {"Cat/wide": Description(text=long_text.strip(), source="ai", prompt_hash="h")}
     out = render(facts(p), CFG, color=False, descriptions=descriptions, show_desc=True)
     desc_lines = [l for l in out.splitlines() if l.startswith("    ")]
     assert len(desc_lines) > 1, "a long description must wrap onto more than one line"
@@ -208,7 +208,7 @@ def test_description_is_wrapped_and_indented_within_the_80_column_budget():
 
 def test_description_is_dim_when_color_on_and_plain_when_off():
     p = _with_path(proj("a", attention=90), "a")
-    descriptions = {"Cat/a": Description(text="Some description.", source="ai", hash="h")}
+    descriptions = {"Cat/a": Description(text="Some description.", source="ai", prompt_hash="h")}
     plain = render(facts(p), CFG, color=False, descriptions=descriptions, show_desc=True)
     colored = render(facts(p), CFG, color=True, descriptions=descriptions, show_desc=True)
     assert "\x1b[" not in plain

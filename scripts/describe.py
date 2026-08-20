@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import atexit
 import fnmatch
+import hashlib
 import json
 import re
 import shutil
@@ -207,6 +208,37 @@ def build_prompt(record: dict, context: dict) -> str:
     return "\n".join(parts)
 
 
+def description_hash(record: dict, context: dict) -> str:
+    """Hash exactly what `build_prompt` reads, and nothing else.
+
+    A description says what a project IS. That changes when its README, its
+    CLAUDE.md, its package description, its name, its category or its
+    top-level layout change -- and at no other time.
+
+    The gate used to be the project's `content_hash`, which is built for the
+    fuller judgment pass: it includes head sha, the porcelain digest and the
+    derived status, so an ordinary commit regenerated the prose, and so did a
+    project decaying from `active` to `stalled` with no content change at all.
+    Measured five hours after a full pass: five projects wanted regenerating
+    and only one of them -- a genuinely new project -- had anything new to say.
+
+    KEEP THIS IN STEP WITH `build_prompt`. If a field is added to the prompt
+    and not to this payload, the description silently stops tracking it; added
+    here but not there, every project regenerates for nothing. They are two
+    halves of one contract, which is why they sit next to each other.
+    """
+    payload = {
+        "name": record.get("name"),
+        "category": record.get("category_display") or record.get("category") or "",
+        "readme": context.get("readme"),
+        "claude_md": context.get("claude_md"),
+        "pkg_description": context.get("pkg_description"),
+        "entries": context.get("entries"),
+    }
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(blob.encode()).hexdigest()
+
+
 def claude_generator(model: str) -> Generator:
     """A generator backed by `claude -p`, pinned to `model` and given no tools.
 
@@ -279,7 +311,7 @@ def run(
     report = DescribeReport()
 
     seen_keys: set[str] = set()
-    to_generate: list[tuple[str, dict]] = []
+    to_generate: list[tuple[str, dict, dict]] = []
 
     for record in projects:
         key = project_key(record, root)
@@ -291,10 +323,7 @@ def run(
             continue
 
         if record.get("redacted"):
-            desired = Description(
-                text=REDACTED_PLACEHOLDER, source="redacted",
-                hash=record.get("content_hash"),
-            )
+            desired = Description(text=REDACTED_PLACEHOLDER, source="redacted")
             if existing is None or (existing.text, existing.source) != (
                 desired.text, desired.source,
             ):
@@ -308,35 +337,42 @@ def run(
             report.skipped_filtered.append(key)
             continue
 
+        # Gathering context for every candidate, not just the ones that turn out
+        # to need work, is what lets the gate BE the prompt's inputs. It costs
+        # three small reads and one listdir per project -- tens of milliseconds
+        # across a whole workspace -- and a run with nothing to do still makes
+        # zero model calls, which is the property that matters.
+        context = context_fn(Path(record["path"]))
+        prompt_hash = description_hash(record, context)
+
         force = force_all and existing is not None and existing.source == "ai"
-        if force or needs_regeneration(existing, record.get("content_hash")):
-            to_generate.append((key, record))
+        if force or needs_regeneration(existing, prompt_hash):
+            to_generate.append((key, record, context))
         else:
             report.skipped_up_to_date.append(key)
 
     if to_generate:
         if dry_run:
-            report.would_generate = [key for key, _ in to_generate]
+            report.would_generate = [key for key, _, _ in to_generate]
         else:
-            def _one(item: tuple[str, dict]):
-                key, record = item
-                context = context_fn(Path(record["path"]))
+            def _one(item: tuple[str, dict, dict]):
+                key, record, context = item
                 prompt = build_prompt(record, context)
                 try:
                     text = generate(prompt)
                 except Exception:  # noqa: BLE001 - one failure must not end the run
                     text = None
-                return key, record, text
+                return key, description_hash(record, context), text
 
             workers = max(1, cfg.settings.describe_parallelism)
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 results = list(pool.map(_one, to_generate))
-            for key, record, text in results:
+            for key, prompt_hash, text in results:
                 if not text or not text.strip():
                     report.failed.append(key)
                     continue
                 new_entries[key] = Description(
-                    text=text.strip(), source="ai", hash=record.get("content_hash"),
+                    text=text.strip(), source="ai", prompt_hash=prompt_hash,
                 )
                 report.generated.append(key)
 

@@ -9,8 +9,12 @@ Two sources, one rule each:
 
 - `source = "manual"` -- the owner's own words. Never regenerated, whatever
   the hash says. This is how he takes ownership of a description he tweaked.
-- `source = "ai"` -- regenerated only when the project's `content_hash` has
-  moved since this description was written. Same gate the briefs will use.
+- `source = "ai"` -- regenerated only when the PROMPT'S OWN INPUTS have moved.
+  Not the project's `content_hash`: that includes head sha, the porcelain
+  digest and the derived status, so every commit -- and even a status decaying
+  from active to stalled with no content change at all -- rewrote prose that
+  describes what a project IS, which almost never changes. See
+  `describe.description_hash`.
 - `source = "redacted"` -- the fixed placeholder for client work. No model
   ever sees a redacted project's contents; see `describe.py`.
 
@@ -37,7 +41,7 @@ REDACTED_PLACEHOLDER = "Client work — contents not summarized."
 class Description:
     text: str
     source: str  # "manual" | "ai" | "redacted"
-    hash: str | None = None
+    prompt_hash: str | None = None
     stale: bool = False
 
 
@@ -52,7 +56,7 @@ def load_descriptions(path: Path) -> dict[str, Description]:
         out[key] = Description(
             text=str(body.get("text", "")),
             source=str(body.get("source", "ai")),
-            hash=body.get("hash"),
+            prompt_hash=body.get("prompt_hash"),
             stale=bool(body.get("stale", False)),
         )
     return out
@@ -63,8 +67,8 @@ def _render_entry(key: str, d: Description) -> str:
     # safe subset of TOML's basic-string rules for the plain prose this holds
     # -- and tomllib round-trips it, which is what actually matters here.
     lines = [f"[{json.dumps(key)}]", f"text = {json.dumps(d.text)}", f"source = {json.dumps(d.source)}"]
-    if d.hash:
-        lines.append(f"hash = {json.dumps(d.hash)}")
+    if d.prompt_hash:
+        lines.append(f"prompt_hash = {json.dumps(d.prompt_hash)}")
     if d.stale:
         lines.append("stale = true")
     return "\n".join(lines)
@@ -84,7 +88,7 @@ def save_descriptions(path: Path, entries: dict[str, Description]) -> bool:
     return atomic_write(path, text)
 
 
-def needs_regeneration(entry: Description | None, content_hash: str) -> bool:
+def needs_regeneration(entry: Description | None, prompt_hash: str) -> bool:
     """Whether an AI-sourced description should be (re)generated.
 
     Missing -> True, so a project that has never had a description (whether
@@ -101,7 +105,7 @@ def needs_regeneration(entry: Description | None, content_hash: str) -> bool:
         return True
     if entry.source == "manual":
         return False
-    return not (entry.source == "ai" and entry.hash == content_hash)
+    return not (entry.source == "ai" and entry.prompt_hash == prompt_hash)
 
 
 def project_key(record: dict, root: Path) -> str:

@@ -12,7 +12,12 @@
 # Install:
 #   cp tools/psum-cron.sh ~/.local/bin/psum-cron && chmod +x ~/.local/bin/psum-cron
 #   crontab -e
-#   30 5 * * * $HOME/.local/bin/psum-cron
+#   30 5,17 * * * $HOME/.local/bin/psum-cron      # twice daily, 12 hours apart
+#
+# Twice a day rather than nightly because the question this answers — what did I
+# leave half-finished — has a half-life measured in hours, not days: a morning
+# run reflects yesterday, an evening run reflects today. It costs no more, since
+# a second pass over an unchanged workspace makes no model calls at all.
 set -uo pipefail
 
 # cron gets a minimal PATH and none of your shell profile. psum and claude both

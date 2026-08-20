@@ -38,15 +38,20 @@ psum scan && psum
 Edit `config/projects.toml` and set `root` to whatever folder holds your projects. That is the
 only setting you must change.
 
-## Running it nightly
+## Running it on a schedule
 
 `scan` and `index` make no model calls, and `describe` is gated on the prompt's inputs, so a
 workspace you did not touch costs nothing. `tools/psum-cron.sh` is a ready wrapper:
 
 ```bash
 cp tools/psum-cron.sh ~/.local/bin/psum-cron && chmod +x ~/.local/bin/psum-cron
-crontab -e     # 30 5 * * * $HOME/.local/bin/psum-cron
+crontab -e     # 30 5,17 * * * $HOME/.local/bin/psum-cron
 ```
+
+Twice a day, twelve hours apart, is a better default than nightly: the question this answers —
+what did I leave half-finished — changes over hours, so a morning run reflects yesterday and an
+evening run reflects today. It costs no more than one run, because a second pass over an
+unchanged workspace makes no model calls at all.
 
 Order matters and the wrapper gets it right: `scan` produces the facts `describe` reads, and
 `describe` writes the descriptions `index` renders. Running `index` first publishes a report

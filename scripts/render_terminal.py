@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from scripts.config import Config, load_config
+from scripts.paths import descriptions_path, facts_path
 from scripts.descriptions import Description, load_descriptions, project_key
 from scripts.fsutil import read_json
 
@@ -160,8 +161,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args(argv)
 
-    repo = Path(__file__).resolve().parent.parent
-    facts = read_json(repo / "state" / "facts.json")
+    facts = read_json(facts_path())
     if facts is None:
         print("no state/facts.json — run `psum scan` first", file=sys.stderr)
         return 1
@@ -173,7 +173,7 @@ def main(argv: list[str]) -> int:
             category=args.category, status=args.status, show_all=args.all,
             color=sys.stdout.isatty() and not args.no_color,
             now=datetime.now().astimezone(),
-            descriptions=load_descriptions(repo / "descriptions.toml"),
+            descriptions=load_descriptions(descriptions_path()),
             show_desc=args.desc,
         )
     )

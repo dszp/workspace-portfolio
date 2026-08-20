@@ -20,6 +20,7 @@ from pathlib import Path
 from scripts import activity as activity_mod
 from scripts.config import Config, is_redacted, load_config, override_for
 from scripts.discovery import discover, is_excluded
+from scripts.paths import facts_path, state_dir
 from scripts.docs import collect_docs
 from scripts.fsutil import LockBusy, atomic_write, state_lock
 from scripts.gitinfo import collect_git
@@ -317,12 +318,11 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--out", type=Path, default=None)
     args = ap.parse_args(argv)
 
-    repo = Path(__file__).resolve().parent.parent
     cfg = load_config(args.config)
-    out = args.out or repo / "state" / "facts.json"
+    out = args.out or facts_path()
 
     try:
-        with state_lock(repo / "state"):
+        with state_lock(state_dir()):
             facts = build_facts(
                 cfg,
                 datetime.now().astimezone(),

@@ -217,10 +217,12 @@ def test_commit_index_is_a_noop_when_nothing_changed(tmp_path, monkeypatch):
 
 
 def _run_main(repo, monkeypatch, argv=()):
-    # main() computes its own repo root from Path(__file__).resolve().parent.parent,
-    # not from cwd or an argument — pointing that at a scratch repo is what makes
-    # main() itself testable without touching this real repo's state/.
-    monkeypatch.setattr(render_index_mod, "__file__", str(repo / "scripts" / "render_index.py"))
+    # main() reads and writes everything under PSUM_HOME, so pointing that at a
+    # scratch repo is what makes main() testable without touching this checkout's
+    # own state/. It also exercises the real mechanism: before PSUM_HOME existed
+    # these tests had to monkeypatch the module's __file__, which tested the
+    # trick rather than the behaviour.
+    monkeypatch.setenv("PSUM_HOME", str(repo))
     buf = io.StringIO()
     with redirect_stdout(buf):
         rc = render_index_mod.main(list(argv))

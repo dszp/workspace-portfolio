@@ -10,6 +10,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from scripts.paths import config_path
+
 VALID_STATUSES = frozenset(
     {"archived", "done", "mid-flight", "active", "stalled", "dormant"}
 )
@@ -101,7 +103,7 @@ class Config:
 
 
 def _default_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "config" / "projects.toml"
+    return config_path()
 
 
 def load_config(path: Path | None = None) -> Config:

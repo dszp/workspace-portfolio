@@ -51,6 +51,7 @@ from scripts.descriptions import (
     save_descriptions,
 )
 from scripts.fsutil import LockBusy, read_json, state_lock
+from scripts.paths import descriptions_path, facts_path, state_dir
 
 Generator = Callable[[str], "str | None"]
 
@@ -364,14 +365,13 @@ def main(argv: list[str], *, generate: Generator | None = None) -> int:
                      help="print what would be generated; call nothing")
     args = ap.parse_args(argv)
 
-    repo = Path(__file__).resolve().parent.parent
     cfg = load_config()
-    facts = read_json(repo / "state" / "facts.json")
+    facts = read_json(facts_path())
     if facts is None:
         print("no state/facts.json — run `psum scan` first", file=sys.stderr)
         return 1
 
-    desc_path = repo / "descriptions.toml"
+    desc_path = descriptions_path()
     gen = generate or claude_generator(cfg.settings.describe_model)
 
     if args.dry_run:
@@ -390,7 +390,7 @@ def main(argv: list[str], *, generate: Generator | None = None) -> int:
         return 0
 
     try:
-        with state_lock(repo / "state"):
+        with state_lock(state_dir()):
             descriptions = load_descriptions(desc_path)
             new_entries, report = run(
                 facts, cfg, descriptions, generate=gen,

@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import subprocess
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -250,11 +251,17 @@ def test_build_prompt_includes_name_category_and_gathered_context():
     assert "Readme first paragraph." in prompt
 
 
-def _run_main(repo, argv, **kw):
-    describe_mod.__file__ = str(repo / "scripts" / "describe.py")
+def _run_main(repo, argv, monkeypatch=None, **kw):
+    # See the note in test_render_index._run_main: PSUM_HOME is the real
+    # mechanism, and pointing it at a scratch dir keeps main() off this
+    # checkout's own state/.
+    os.environ["PSUM_HOME"] = str(repo)
     buf = io.StringIO()
     with redirect_stdout(buf):
-        rc = describe_mod.main(argv, **kw)
+        try:
+            rc = describe_mod.main(argv, **kw)
+        finally:
+            os.environ.pop("PSUM_HOME", None)
     return rc, buf.getvalue()
 
 

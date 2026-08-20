@@ -38,6 +38,30 @@ psum scan && psum
 Edit `config/projects.toml` and set `root` to whatever folder holds your projects. That is the
 only setting you must change.
 
+## Where your data lives
+
+By default the tool keeps its data beside its code: `config/projects.toml`, `state/`,
+`descriptions.toml` and `INDEX.md` all sit at the repo root. That is fine for one person with
+one checkout, and it is what you get if you change nothing.
+
+It stops being fine the moment the code is shared. Running `psum index` in a plain clone
+auto-commits your private workspace map — every project name and path — into your checkout of
+somebody else's source, and there is nowhere to put your data that is not *inside the program*.
+
+`PSUM_HOME` separates them:
+
+```bash
+export PSUM_HOME=~/my-portfolio      # your data: config, state, descriptions, INDEX.md
+psum scan && psum index              # code stays read-only wherever you cloned it
+```
+
+The directory can be empty to start with, and can be its own private git repo — which is the
+point: the tool is public and shared, your workspace map is private and yours. If it holds no
+`config/projects.toml`, the defaults shipped with the code are used, so a fresh `PSUM_HOME`
+works immediately and you only write a config when you want to change a setting.
+
+Unset, `PSUM_HOME` resolves to the code root, so existing single-checkout installs are unaffected.
+
 ## The four commands
 
 | Command | Cost | What it does |
@@ -185,6 +209,7 @@ static site, any wiki, or read it where it sits.
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `PSUM_HOME` (env) | the code root | Where config, state, descriptions and `INDEX.md` live. |
 | `root` | `~/workspace` | The folder to scan. |
 | `max_depth` | `4` | How deep to look for projects. |
 | `active_days` | `21` | Quiet longer than this and a project stops being `active`. |
@@ -217,7 +242,7 @@ on your own hardware.
 ## Development
 
 ```bash
-uv run --with pytest pytest -q      # 188 tests
+uv run --with pytest pytest -q      # 194 tests
 ```
 
 No dependencies to install. The tests build real git repositories in temp directories rather than

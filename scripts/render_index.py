@@ -17,6 +17,9 @@ from pathlib import Path
 
 from scripts.config import Config, load_config
 from scripts.descriptions import Description, load_descriptions, project_key
+from scripts.paths import (
+    descriptions_path, facts_path, index_path, psum_home, state_dir,
+)
 
 from scripts.fsutil import LockBusy, atomic_write, read_json, state_lock
 from scripts.render_terminal import relative_age
@@ -197,28 +200,28 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--no-commit", action="store_true")
     args = ap.parse_args(argv)
 
-    repo = Path(__file__).resolve().parent.parent
-    index = repo / "INDEX.md"
+    repo = psum_home()
+    index = index_path()
     # This copy, never the live INDEX.md: pvault mounts are bidirectional, and
     # Obsidian's normalizer writing back into a file this repo also treats as
     # its own generated output is exactly the corruption this split avoids.
     # Nothing of value lives in state/vault/ -- the next render overwrites it.
-    vault_index = repo / "state" / "vault" / VAULT_INDEX_NAME
+    vault_index = state_dir() / "vault" / VAULT_INDEX_NAME
     changed = False
     committed = False
     try:
-        with state_lock(repo / "state"):
+        with state_lock(state_dir()):
             # Read INSIDE the lock, not before it: a concurrent `scan` writes
             # facts.json under the same lock, and reading it outside gives the
             # render+commit below no guarantee it is working from the facts
             # snapshot its own run started with.
-            facts = read_json(repo / "state" / "facts.json")
+            facts = read_json(facts_path())
             if facts is None:
                 print("no state/facts.json — run `psum scan` first", file=sys.stderr)
                 return 1
             rendered = render(
                 facts, load_config(), now=datetime.now().astimezone(),
-                descriptions=load_descriptions(repo / "descriptions.toml"),
+                descriptions=load_descriptions(descriptions_path()),
             )
             index_changed = atomic_write(index, rendered)
             vault_changed = atomic_write(vault_index, rendered)

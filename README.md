@@ -38,6 +38,25 @@ psum scan && psum
 Edit `config/projects.toml` and set `root` to whatever folder holds your projects. That is the
 only setting you must change.
 
+## Running it nightly
+
+`scan` and `index` make no model calls, and `describe` is gated on the prompt's inputs, so a
+workspace you did not touch costs nothing. `tools/psum-cron.sh` is a ready wrapper:
+
+```bash
+cp tools/psum-cron.sh ~/.local/bin/psum-cron && chmod +x ~/.local/bin/psum-cron
+crontab -e     # 30 5 * * * $HOME/.local/bin/psum-cron
+```
+
+Order matters and the wrapper gets it right: `scan` produces the facts `describe` reads, and
+`describe` writes the descriptions `index` renders. Running `index` first publishes a report
+missing the descriptions generated seconds later.
+
+Note that `index` commits on **every** run, not only when something substantive changed — the
+report carries a scan timestamp and relative ages ("9h", "1d"), so its bytes differ each time.
+That is one commit a day in whatever repo holds your data, which is a reasonable history to
+have; it is not the tool failing to notice that nothing happened.
+
 ## Where your data lives
 
 By default the tool keeps its data beside its code: `config/projects.toml`, `state/`,

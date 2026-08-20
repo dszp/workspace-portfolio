@@ -54,7 +54,12 @@ scan_builtin() {
   while IFS= read -r line; do
     no="${line%%:*}"
     report "$f" "$no" "absolute home path" "${line#*:}"
-  done < <(staged_content "$f" | grep -nE '/(home|Users)/[a-z0-9_.-]+/' || true)
+    # Placeholder users are the whole point of a deploy guide, and a guard that
+    # flags /home/user/ on every commit is a guard that gets uninstalled. Skip
+    # the conventional stand-ins and dot-entries (/home/.vscode-server is not a
+    # username at all); flag anything that looks like a real account.
+  done < <(staged_content "$f" | grep -nE '/(home|Users)/[a-zA-Z0-9_.$<>{}-]+/' \
+      | grep -vE '/(home|Users)/(x|y|user|users|dev|you|me|alex|jane|john|USER|\$[A-Za-z_][A-Za-z0-9_]*|\$\{[^}]+\}|<[^>]+>|__[A-Z_]+__|\.[a-zA-Z0-9_.-]+)/' || true)
 
   while IFS= read -r line; do
     no="${line%%:*}"

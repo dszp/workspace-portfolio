@@ -263,7 +263,12 @@ of secret names committed to a public repo publishes exactly what it was written
 `.leakguard.example` is the committed template and contains no real names.
 
 Hooks are per-clone and never travel with a push, so run the installer in each checkout that
-matters. `git commit --no-verify` bypasses it, documented on purpose: a guard nobody can
+matters — and re-run it after editing `tools/leakguard.sh`, because the hook is a *copy*, not a
+symlink. (A symlink into the worktree would let a branch that edits the guard change what guards
+the commit editing it.)
+
+Placeholder home paths — `/home/user/`, `/home/$DEV_USER/`, `/Users/<user>/`, `/home/.config/` —
+are allowlisted. A guard that fires on every deploy guide is a guard that gets uninstalled. `git commit --no-verify` bypasses it, documented on purpose: a guard nobody can
 override is a guard people delete.
 
 ## Development

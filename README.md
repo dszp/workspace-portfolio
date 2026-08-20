@@ -241,10 +241,11 @@ on your own hardware.
 
 ## Keeping private things out of a public repo
 
-This repo was extracted from a private one, and the extraction found real leaks — a client
-abbreviation and a set of private repo names, in a *public* sibling project, sitting in the
-default config its installer wrote into every user's machine. Nothing catches that except a
-check that runs before the commit.
+This tool reads a whole workspace, so the repo that runs it accumulates names you may not want
+published — clients, private projects, internal hosts. The dangerous case is not the obvious
+one: it is a default value, an example in a comment, or a fixture that quietly carries a real
+name into a public commit. Review does not catch that reliably. A check that runs before the
+commit does.
 
 ```bash
 bash tools/install-hooks.sh

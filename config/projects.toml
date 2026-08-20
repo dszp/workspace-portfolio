@@ -1,0 +1,42 @@
+[settings]
+root            = "~/workspace"
+max_depth       = 4
+active_days     = 21
+# Worker threads for the per-project collection pass. Default 1 -- measured, not
+# assumed. On this host (5 cores) threading the scan made it SLOWER, because the
+# work is ~700-860 git subprocess spawns and fork/exec contention outweighs the
+# overlapped I/O: 1 -> 30.3s, 3 -> 47.3s, 6 -> 53-57s. Raise it only after
+# measuring on your own hardware.
+parallelism     = 1
+# `psum describe` calls one `claude -p` subprocess per project -- network-bound,
+# not fork/exec-bound like the scan above, so a higher default is measured-safe
+# rather than measured-slower.
+describe_parallelism = 6
+exclude_globs   = ["**/node_modules/**", "**/.venv/**", "**/vendor/**"]
+generated_globs = ["state/**", "INDEX.md", "html/**"]
+hide_status     = ["dormant", "archived"]
+redact_prefixes = ["clients/"]
+# How many of the top (currently sorted) terminal rows show their description
+# by default. `--desc` shows it for every visible row instead.
+desc_rows       = 10
+
+[weights]
+dirty             = 25
+unpushed          = 15
+handoff           = 20
+half_plan         = 10
+branch_ahead      = 10
+mid_flight_cap    = 60
+stall_max         = 40
+intensity_commits = 60
+intensity_files   = 20
+pressure_cap      = 20
+stall_grace_days  = 7
+stall_ramp_days   = 60
+
+# Display names for top-level folders whose real name is shouty, abbreviated,
+# or just ugly in a table. Purely cosmetic -- the key is the folder as it
+# exists on disk, the value is what the reports call it.
+[categories]
+"STEP BY STEP GUIDES" = "Guides"
+"VENDOR-INTEGRATIONS" = "Integrations"

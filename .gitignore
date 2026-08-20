@@ -1,0 +1,7 @@
+state/facts.json
+state/.lock
+state/.*.tmp.*
+html/
+__pycache__/
+*.pyc
+.venv/

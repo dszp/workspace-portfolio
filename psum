@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# psum — workspace portfolio index dispatcher.
+#
+# Verbs route to scripts/*.py. No arguments prints the attention table, which
+# is the whole point of the tool: the common case costs no typing.
+set -euo pipefail
+
+# Resolve symlinks before deriving the repo root. Putting `psum` on PATH is
+# done by symlinking it into ~/.local/bin, and BASH_SOURCE is then the SYMLINK
+# path — so the unresolved form sets REPO to ~/.local/bin and every verb dies
+# with "No module named 'scripts'". readlink -f follows the whole chain.
+REPO="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+cd "$REPO"
+
+verb="${1-}"
+case "$verb" in
+  scan)     shift; exec python3 -m scripts.scan "$@" ;;
+  index)    shift; exec python3 -m scripts.render_index "$@" ;;
+  describe) shift; exec python3 -m scripts.describe "$@" ;;
+  -h|--help)
+    cat <<'USAGE'
+psum — workspace portfolio index
+
+  psum                     attention-sorted table (default)
+  psum --recent            sort by last worked
+  psum --category NAME     filter to one category
+  psum --status STATUS     filter to one status
+  psum --all               include dormant and archived
+  psum --desc              show descriptions for every visible row
+  psum scan                rescan ~/workspace into state/facts.json
+  psum index               regenerate and commit INDEX.md
+  psum describe            generate missing/stale project descriptions
+    --all                    regenerate every AI-sourced entry
+    --only PATTERN           scope to matching slug/name/path
+    --dry-run                print what would be generated; call nothing
+USAGE
+    ;;
+  *)      exec python3 -m scripts.render_terminal "$@" ;;
+esac

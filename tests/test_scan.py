@@ -1,8 +1,12 @@
 import dataclasses
+import io
 import json
 from datetime import datetime
 from pathlib import Path
+from contextlib import redirect_stdout
+
 from scripts import render_index
+from scripts import scan as scan_mod
 from scripts.config import ProjectOverride, load_config
 from scripts.scan import build_facts, redact_record
 from tests.conftest import cfg_for
@@ -615,3 +619,55 @@ def test_a_project_failing_at_two_stages_keeps_both_error_messages(tmp_path, mon
     rec = by_name(_facts(tmp_path))["plain-repo"]
     assert any("git stage failed" in m for m in rec["error"])
     assert any("docs stage failed" in m for m in rec["error"])
+
+
+def test_main_writes_facts_under_psum_home(tmp_path, monkeypatch):
+    """`scan.main()` had NO test at all, and a refactor shipped a NameError in
+    it that the whole 188-test suite passed straight over. Every other entry
+    point is covered; this one was not, purely because it is the one that
+    writes a real file.
+
+    It also pins self_path to PSUM_HOME: that argument decides whose generated
+    output (state/**, INDEX.md) is excluded from activity, and after the code /
+    data split those files live under PSUM_HOME, not beside the code.
+    """
+    workspace = tmp_path / "ws"
+    (workspace / "a-repo").mkdir(parents=True)
+    (workspace / "a-repo" / "README.md").write_text("# a\n")
+
+    # PSUM_HOME lives INSIDE the scanned workspace, which is the arrangement
+    # self_path exists for: psum's own output must not make its data directory
+    # look like a project somebody just worked on.
+    home = workspace / "portfolio"
+    home.mkdir()
+    (home / "README.md").write_text("# data dir\n")
+    (home / "INDEX.md").write_text("# generated, must not count\n")
+
+    cfg_dir = home / "config"
+    cfg_dir.mkdir()
+    (cfg_dir / "projects.toml").write_text(
+        f'[settings]\nroot = "{workspace}"\n'
+    )
+    monkeypatch.setenv("PSUM_HOME", str(home))
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        rc = scan_mod.main([])
+
+    assert rc == 0, buf.getvalue()
+    facts_file = home / "state" / "facts.json"
+    assert facts_file.exists(), "facts.json must land under PSUM_HOME"
+    data = json.loads(facts_file.read_text())
+    by_name = {p["name"]: p for p in data["projects"]}
+    assert set(by_name) == {"a-repo", "portfolio"}
+
+    # generated_globs includes "INDEX.md". Applied (self_path == PSUM_HOME) the
+    # data directory counts only its README; not applied, INDEX.md counts too
+    # and the directory looks freshly worked on. Passing the wrong path here —
+    # or None — flips this number, which is what makes the assertion mean
+    # anything at all.
+    # The data dir holds README.md, config/projects.toml and INDEX.md. With
+    # self_path applied, INDEX.md is excluded and two remain; without it, all
+    # three count and the directory reads as freshly worked on.
+    assert by_name["portfolio"]["fs"]["file_count"] == 2
+    assert by_name["a-repo"]["fs"]["file_count"] == 1

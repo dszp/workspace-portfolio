@@ -20,7 +20,7 @@ from pathlib import Path
 from scripts import activity as activity_mod
 from scripts.config import Config, is_redacted, load_config, override_for
 from scripts.discovery import discover, is_excluded
-from scripts.paths import facts_path, state_dir
+from scripts.paths import facts_path, psum_home, state_dir
 from scripts.docs import collect_docs
 from scripts.fsutil import LockBusy, atomic_write, state_lock
 from scripts.gitinfo import collect_git
@@ -329,7 +329,10 @@ def main(argv: list[str]) -> int:
                 remember_root=Path.home() / ".remember",
                 claude_root=Path.home() / ".claude" / "projects",
                 herdr=activity_mod.herdr_snapshot(),
-                self_path=repo,
+                # The project psum WRITES into is the one whose generated
+                # files (state/**, INDEX.md) must not count as activity — and
+                # that is PSUM_HOME, not wherever the code happens to live.
+                self_path=psum_home(),
             )
             atomic_write(out, json.dumps(facts, indent=2, sort_keys=False) + "\n")
     except LockBusy as exc:

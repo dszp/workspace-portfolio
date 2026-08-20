@@ -239,10 +239,37 @@ on your own hardware.
 - **Concurrency is handled.** `state/.lock` is an `flock`; every write is temp-file-plus-rename. Two
   runs at once will not corrupt anything — the second reports the lock and exits.
 
+## Keeping private things out of a public repo
+
+This repo was extracted from a private one, and the extraction found real leaks — a client
+abbreviation and a set of private repo names, in a *public* sibling project, sitting in the
+default config its installer wrote into every user's machine. Nothing catches that except a
+check that runs before the commit.
+
+```bash
+bash tools/install-hooks.sh
+```
+
+That installs `tools/leakguard.sh` as this clone's `pre-commit` hook. It scans the **staged
+blob** — not the worktree, which differs the moment you stage something and keep editing — and
+refuses the commit on:
+
+- **Built-in, no configuration:** absolute `/home/<user>` and `/Users/<user>` paths, email
+  addresses (GitHub noreply and `example.com` excepted), and private-key headers.
+- **Your own denylist:** client names, private repo names, internal hosts.
+
+The denylist deliberately lives at `.git/leakguard-patterns`, **not** in the repository. A list
+of secret names committed to a public repo publishes exactly what it was written to protect —
+`.leakguard.example` is the committed template and contains no real names.
+
+Hooks are per-clone and never travel with a push, so run the installer in each checkout that
+matters. `git commit --no-verify` bypasses it, documented on purpose: a guard nobody can
+override is a guard people delete.
+
 ## Development
 
 ```bash
-uv run --with pytest pytest -q      # 194 tests
+uv run --with pytest pytest -q      # 195 tests
 ```
 
 No dependencies to install. The tests build real git repositories in temp directories rather than

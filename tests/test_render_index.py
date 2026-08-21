@@ -276,3 +276,42 @@ def test_vault_index_name_has_no_whitespace():
     # The whitespace rule now lives with the filenames themselves, in
     # scripts/paths.py — see test_paths.test_vault_filenames_contain_no_whitespace.
     assert render_index_mod.vault_index_path().name.endswith(".md")
+
+
+def test_index_writes_and_stages_both_vault_notes(monkeypatch, tmp_path):
+    """One run produces the readable note AND its machine-readable companion.
+
+    They must move together: a phone that reads a fresh DATA note and a
+    stale INDEX would attribute one scan's numbers to another's descriptions.
+    """
+    import json
+    import subprocess
+
+    import scripts.render_index as ri
+    from scripts import paths
+
+    home = tmp_path / "home"
+    (home / "state").mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(home)], check=True)
+    subprocess.run(["git", "-C", str(home), "config", "user.email", "t@example.com"], check=True)
+    subprocess.run(["git", "-C", str(home), "config", "user.name", "T"], check=True)
+
+    doc = {"schema_version": 1, "scanned_at": "2026-08-21T05:30:00-04:00",
+           "projects": [], "errors": []}
+    (home / "state" / "facts.json").write_text(json.dumps(doc))
+    monkeypatch.setenv(paths.HOME_ENV, str(home))
+
+    # ONE run, then both assertions. A second run would find byte-identical
+    # content, atomic_write would return False, `changed` would be False and
+    # the commit would be skipped — so splitting this across two calls
+    # asserts tracking against a run that deliberately did not commit.
+    assert ri.main([]) == 0
+    assert paths.vault_index_path().exists()
+    assert paths.vault_data_path().exists()
+    assert "Portfolio Data" in paths.vault_data_path().read_text()
+
+    tracked = subprocess.run(
+        ["git", "-C", str(home), "ls-files"],
+        capture_output=True, text=True, check=True).stdout
+    assert paths.VAULT_DATA_NAME in tracked
+    assert paths.VAULT_INDEX_NAME in tracked

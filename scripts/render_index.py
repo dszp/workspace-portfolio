@@ -19,9 +19,10 @@ from scripts.config import Config, load_config
 from scripts.descriptions import Description, load_descriptions, project_key
 from scripts.paths import (
     descriptions_path, facts_path, index_path, psum_home, state_dir,
-    vault_index_path,
+    vault_data_path, vault_index_path,
 )
 
+from scripts import render_data
 from scripts.fsutil import LockBusy, atomic_write, facts_error, read_json, state_lock
 from scripts.render_terminal import relative_age
 
@@ -201,6 +202,7 @@ def main(argv: list[str]) -> int:
     # its own generated output is exactly the corruption this split avoids.
     # Nothing of value lives in state/vault/ -- the next render overwrites it.
     vault_index = vault_index_path()
+    vault_data = vault_data_path()
     changed = False
     committed = False
     try:
@@ -217,12 +219,17 @@ def main(argv: list[str]) -> int:
                 facts, load_config(), now=datetime.now().astimezone(),
                 descriptions=load_descriptions(descriptions_path()),
             )
+            # Rendered from the SAME facts snapshot, inside the SAME lock: a
+            # phone reading a fresh data note against a stale index would
+            # attribute one scan's numbers to another scan's descriptions.
+            data_rendered = render_data.render(facts, now=datetime.now().astimezone())
             index_changed = atomic_write(index, rendered)
             vault_changed = atomic_write(vault_index, rendered)
-            changed = index_changed or vault_changed
+            data_changed = atomic_write(vault_data, data_rendered)
+            changed = index_changed or vault_changed or data_changed
             if changed and not args.no_commit:
                 committed = commit_index(
-                    repo, [index, vault_index],
+                    repo, [index, vault_index, vault_data],
                     f"chore(index): {len(facts['projects'])} projects, "
                     f"{facts['scanned_at'][:10]}",
                 )

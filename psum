@@ -17,6 +17,7 @@ case "$verb" in
   scan)     shift; exec python3 -m scripts.scan "$@" ;;
   index)    shift; exec python3 -m scripts.render_index "$@" ;;
   describe) shift; exec python3 -m scripts.describe "$@" ;;
+  query)    shift; exec python3 -m scripts.query "$@" ;;
   -h|--help)
     cat <<'USAGE'
 psum — workspace portfolio index
@@ -33,6 +34,12 @@ psum — workspace portfolio index
     --all                    regenerate every AI-sourced entry
     --only PATTERN           scope to matching slug/name/path
     --dry-run                print what would be generated; call nothing
+  psum query               machine-readable JSON for every project
+    --status S               filter to one status
+    --category C             filter to one category
+    --sort attention|recent|name
+    --limit N                keep the first N after sorting
+    --detail PROJECT ...     full record(s) by slug, name or substring
 USAGE
     ;;
   *)      exec python3 -m scripts.render_terminal "$@" ;;

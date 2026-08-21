@@ -86,7 +86,7 @@ works immediately and you only write a config when you want to change a setting.
 
 Unset, `PSUM_HOME` resolves to the code root, so existing single-checkout installs are unaffected.
 
-## The four commands
+## The five commands
 
 | Command | Cost | What it does |
 |---|---|---|
@@ -94,6 +94,7 @@ Unset, `PSUM_HOME` resolves to the code root, so existing single-checkout instal
 | `psum scan` | ~30s, no network | Walks the workspace and rewrites `state/facts.json`. |
 | `psum index` | instant | Renders `INDEX.md` and a vault-safe copy, and commits them. |
 | `psum describe` | **costs model tokens** | Writes one-to-three-sentence descriptions of each project. |
+| `psum query` | free, instant | Emits the same cached facts as JSON, for a model to reason over. |
 
 Everything except `describe` is deterministic and free. Run `psum scan && psum` when you sit down;
 run `describe` rarely.
@@ -104,7 +105,13 @@ psum --category NAME       filter to one category
 psum --status stalled      filter to one status
 psum --all                 include dormant and archived
 psum --desc                show the description for every row, not just the top ones
+
+psum query                 machine-readable JSON for every project
+  --detail PROJECT ...       full record(s) by slug, name or substring
 ```
+
+> `psum query` reads the committed `state/facts.json` and never rescans — it is
+> the read path the `psum` skill uses, so it must stay fast and side-effect free.
 
 ## How status is decided
 

@@ -243,3 +243,64 @@ def test_detail_of_a_redacted_project_yields_only_the_placeholder():
     out = detail(p, descs, ROOT, NOW)
     assert out["description"] == REDACTED_PLACEHOLDER
     assert out["name"] is None
+
+
+import json
+
+
+def _run(monkeypatch, tmp_path, argv, facts_doc=None, write=True):
+    """Run query.main with paths redirected into tmp_path."""
+    import scripts.query as q
+
+    fp = tmp_path / "facts.json"
+    if write and facts_doc is not None:
+        fp.write_text(json.dumps(facts_doc))
+    monkeypatch.setattr(q, "facts_path", lambda: fp)
+    monkeypatch.setattr(q, "descriptions_path", lambda: tmp_path / "descriptions.toml")
+    return q.main(argv)
+
+
+def test_main_prints_one_json_envelope(monkeypatch, tmp_path, capsys):
+    rc = _run(monkeypatch, tmp_path, [], facts(proj("alpha"), proj("beta")))
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["count"] == 2
+    assert {p["name"] for p in out["projects"]} == {"alpha", "beta"}
+    assert "scan_age" in out
+
+
+def test_main_detail_emits_the_full_record(monkeypatch, tmp_path, capsys):
+    rc = _run(monkeypatch, tmp_path, ["--detail", "alpha"], facts(proj("alpha", plans=((2, 3),))))
+    assert rc == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["count"] == 1
+    # The per-plan breakdown is the reason --detail exists; the compact
+    # projection flattens it to "2/5".
+    assert out["projects"][0]["docs"]["plans"][0]["unchecked"] == 3
+
+
+def test_main_exits_nonzero_when_facts_is_missing(monkeypatch, tmp_path, capsys):
+    rc = _run(monkeypatch, tmp_path, [], write=False)
+    assert rc == 1
+    assert "psum scan" in capsys.readouterr().err
+
+
+def test_main_exits_nonzero_and_says_malformed_when_facts_is_corrupt(monkeypatch, tmp_path, capsys):
+    (tmp_path / "facts.json").write_text("{not json")
+    rc = _run(monkeypatch, tmp_path, [], write=False)
+    assert rc == 1
+    assert "malformed" in capsys.readouterr().err
+
+
+def test_main_exits_nonzero_on_an_unresolvable_detail(monkeypatch, tmp_path, capsys):
+    rc = _run(monkeypatch, tmp_path, ["--detail", "nope"], facts(proj("alpha")))
+    assert rc == 2
+    assert "nope" in capsys.readouterr().err
+
+
+def test_main_empty_result_is_success_not_an_error(monkeypatch, tmp_path, capsys):
+    # "nothing matches" is an answer, not a failure. Exiting nonzero here
+    # would make a legitimate question look like a broken command.
+    rc = _run(monkeypatch, tmp_path, ["--status", "done"], facts(proj("alpha")))
+    assert rc == 0
+    assert json.loads(capsys.readouterr().out)["count"] == 0

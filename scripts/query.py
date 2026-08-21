@@ -18,10 +18,16 @@ vocabulary would never have anticipated.
 """
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
-from scripts.descriptions import Description, project_key
+from scripts.config import load_config
+from scripts.descriptions import Description, load_descriptions, project_key
+from scripts.fsutil import facts_error, read_json
+from scripts.paths import descriptions_path, facts_path
 from scripts.render_terminal import relative_age
 
 
@@ -176,3 +182,52 @@ def detail(
     entry = descriptions.get(project_key(p, root)) if descriptions else None
     out["description"] = entry.text if entry and entry.text else None
     return out
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(
+        prog="psum query",
+        description="Machine-readable portfolio facts as one JSON envelope.",
+    )
+    ap.add_argument("--status", help="only projects with this derived status")
+    ap.add_argument("--category", help="only projects in this category")
+    ap.add_argument("--sort", choices=("attention", "recent", "name"),
+                    default="attention")
+    ap.add_argument("--limit", type=int, help="keep the first N after sorting")
+    ap.add_argument("--detail", nargs="+", metavar="PROJECT",
+                    help="full record(s) by slug, name, or unique substring")
+    args = ap.parse_args(argv)
+
+    # Never rescans. A verb that answers a question must not take 30 seconds,
+    # and must not mutate state under a concurrent reader.
+    facts = read_json(facts_path())
+    if facts is None:
+        print(facts_error(facts_path()), file=sys.stderr)
+        return 1
+
+    now = datetime.now().astimezone()
+    projects = facts.get("projects", [])
+
+    if args.detail:
+        root = load_config().settings.root.resolve()
+        descriptions = load_descriptions(descriptions_path())
+        try:
+            rows = [detail(resolve(projects, a), descriptions, root, now)
+                    for a in args.detail]
+        except ResolveError as exc:
+            print(f"psum query: {exc}", file=sys.stderr)
+            return 2
+    else:
+        rows = [
+            compact(p, now)
+            for p in select(projects, status=args.status, category=args.category,
+                            sort=args.sort, limit=args.limit)
+        ]
+
+    json.dump(envelope(facts, rows, now), sys.stdout, indent=1, ensure_ascii=False)
+    sys.stdout.write("\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

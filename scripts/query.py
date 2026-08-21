@@ -19,7 +19,9 @@ vocabulary would never have anticipated.
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 
+from scripts.descriptions import Description, project_key
 from scripts.render_terminal import relative_age
 
 
@@ -116,3 +118,61 @@ def envelope(facts: dict, rows: list[dict], now: datetime) -> dict:
         "count": len(rows),
         "projects": rows,
     }
+
+
+class ResolveError(ValueError):
+    """No project, or more than one, matched a `--detail` argument."""
+
+
+def resolve(projects: list[dict], arg: str) -> dict:
+    """Find one project by slug, name, or unique substring of either.
+
+    Exact matches are tried first and in that order, so naming a project
+    precisely is never an ambiguity error even when its name is a substring
+    of a longer one ("api" alongside "api-gateway").
+
+    Substrings exist because slugs are the absolute path with separators
+    swapped -- a caller forced to produce one exactly would spend a round
+    trip looking it up before it could ask its real question.
+    """
+    for p in projects:
+        if p.get("slug") == arg:
+            return p
+    for p in projects:
+        if p.get("name") == arg:
+            return p
+    needle = arg.lower()
+    # `name` is None for a redacted record -- `or ""` keeps the scan from
+    # raising AttributeError before it reaches the slug, which is the only
+    # handle such a project has.
+    hits = [
+        p for p in projects
+        if needle in (p.get("name") or "").lower()
+        or needle in (p.get("slug") or "").lower()
+    ]
+    if len(hits) == 1:
+        return hits[0]
+    if not hits:
+        raise ResolveError(f"no project matches {arg!r}")
+    candidates = ", ".join(sorted(h.get("name") or h.get("slug") or "?" for h in hits))
+    raise ResolveError(f"{arg!r} is ambiguous — candidates: {candidates}")
+
+
+def detail(
+    p: dict,
+    descriptions: dict[str, Description] | None,
+    root: Path,
+    now: datetime,
+) -> dict:
+    """The record verbatim, plus `description` and `age`.
+
+    Nothing is reshaped. A verbatim record and its description can be
+    understood without reading this module, which a bespoke detail schema
+    could not -- and it is the only shape carrying the per-plan checkbox
+    counts that answer "what did I have left to do here".
+    """
+    out = dict(p)
+    out["age"] = relative_age(p["derived"].get("last_worked"), now)
+    entry = descriptions.get(project_key(p, root)) if descriptions else None
+    out["description"] = entry.text if entry and entry.text else None
+    return out

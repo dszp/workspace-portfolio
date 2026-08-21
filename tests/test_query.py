@@ -157,3 +157,89 @@ def test_envelope_carries_freshness_and_count():
     assert env["scan_age"] == "6h"
     assert env["count"] == 2
     assert len(env["projects"]) == 2
+
+
+import pytest
+
+from pathlib import Path
+from scripts.descriptions import REDACTED_PLACEHOLDER, Description
+from scripts.query import ResolveError, detail, resolve
+
+ROOT = Path("/w")  # never a symlink, so project_key's resolve() cannot diverge
+
+
+def test_resolve_prefers_exact_slug():
+    ps = [proj("alpha", slug="s-alpha"), proj("beta", slug="s-beta")]
+    assert resolve(ps, "s-beta")["name"] == "beta"
+
+
+def test_resolve_accepts_an_exact_name():
+    ps = [proj("alpha", slug="s-alpha"), proj("beta", slug="s-beta")]
+    assert resolve(ps, "beta")["slug"] == "s-beta"
+
+
+def test_resolve_accepts_a_unique_case_insensitive_substring():
+    ps = [proj("workspace-portfolio"), proj("something-else")]
+    assert resolve(ps, "PORTFOL")["name"] == "workspace-portfolio"
+
+
+def test_an_exact_name_wins_over_a_substring_of_another():
+    # "api" is an exact name AND a substring of "api-gateway". Exactness must
+    # win, or naming a project precisely would be an ambiguity error.
+    ps = [proj("api"), proj("api-gateway")]
+    assert resolve(ps, "api")["name"] == "api"
+
+
+def test_resolve_raises_on_an_ambiguous_substring_and_names_the_candidates():
+    ps = [proj("api-gateway"), proj("api-worker")]
+    with pytest.raises(ResolveError) as exc:
+        resolve(ps, "api-")
+    assert "api-gateway" in str(exc.value)
+    assert "api-worker" in str(exc.value)
+
+
+def test_resolve_raises_on_no_match_and_names_the_argument():
+    with pytest.raises(ResolveError) as exc:
+        resolve([proj("alpha")], "nope")
+    assert "nope" in str(exc.value)
+
+
+def test_resolve_matches_a_redacted_record_by_slug_without_raising():
+    # `name` is None; a substring scan that assumed str would raise
+    # AttributeError before ever reaching the slug.
+    p = proj("x", slug="redacted-abc123", redacted=True)
+    p["name"] = None
+    assert resolve([p, proj("alpha")], "abc123")["slug"] == "redacted-abc123"
+
+
+def test_detail_returns_the_record_verbatim_plus_description_and_age():
+    p = proj("alpha", path="~/workspace/Cat/alpha")
+    descs = {"Cat/alpha": Description(text="A thing.", source="ai")}
+    p["path"] = "/w/Cat/alpha"
+    out = detail(p, descs, ROOT, NOW)
+    assert out["description"] == "A thing."
+    assert out["age"] == "3d"
+    # Verbatim: every key of the input record survives untouched, so a
+    # consumer can read the plan/spec checkbox counts that only live here.
+    for key, value in p.items():
+        assert out[key] == value
+
+
+def test_detail_description_is_null_when_absent():
+    p = proj("alpha")
+    p["path"] = "/w/Cat/alpha"
+    assert detail(p, {}, ROOT, NOW)["description"] is None
+    assert detail(p, None, ROOT, NOW)["description"] is None
+
+
+def test_detail_of_a_redacted_project_yields_only_the_placeholder():
+    # The whole point of redaction: no model ever saw this project, so the
+    # only description that can exist is the fixed placeholder. Any other
+    # prose here would mean generated content escaped the redaction.
+    p = proj("x", slug="redacted-abc123", redacted=True)
+    p["name"] = None
+    p["path"] = None
+    descs = {"redacted-abc123": Description(text=REDACTED_PLACEHOLDER, source="redacted")}
+    out = detail(p, descs, ROOT, NOW)
+    assert out["description"] == REDACTED_PLACEHOLDER
+    assert out["name"] is None

@@ -75,3 +75,17 @@ def read_json(path: Path, default=None):
         return json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return default
+
+
+def facts_error(path: Path) -> str:
+    """The right stderr message when `read_json(path)` returned its default.
+
+    read_json cannot distinguish "never scanned" from "corrupt" -- both come
+    back as the default -- and every caller used to print the same
+    run-a-scan message for both. Telling a reader to run `psum scan` when the
+    file is actually malformed sends them to a command that will not fix it,
+    and costs them a scan to find that out.
+    """
+    if path.exists():
+        return f"{path} is unreadable or malformed — inspect it, or re-run `psum scan`"
+    return f"no {path.name} — run `psum scan` first"

@@ -10,7 +10,7 @@ from pathlib import Path
 from scripts.config import Config, load_config
 from scripts.paths import descriptions_path, facts_path
 from scripts.descriptions import Description, load_descriptions, project_key
-from scripts.fsutil import read_json
+from scripts.fsutil import facts_error, read_json
 
 RESET = "\x1b[0m"
 DIM = "\x1b[2m"
@@ -163,7 +163,7 @@ def main(argv: list[str]) -> int:
 
     facts = read_json(facts_path())
     if facts is None:
-        print("no state/facts.json — run `psum scan` first", file=sys.stderr)
+        print(facts_error(facts_path()), file=sys.stderr)
         return 1
 
     sys.stdout.write(

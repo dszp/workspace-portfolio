@@ -51,7 +51,7 @@ from scripts.descriptions import (
     project_key,
     save_descriptions,
 )
-from scripts.fsutil import LockBusy, read_json, state_lock
+from scripts.fsutil import LockBusy, facts_error, read_json, state_lock
 from scripts.paths import descriptions_path, facts_path, state_dir
 
 Generator = Callable[[str], "str | None"]
@@ -404,7 +404,7 @@ def main(argv: list[str], *, generate: Generator | None = None) -> int:
     cfg = load_config()
     facts = read_json(facts_path())
     if facts is None:
-        print("no state/facts.json — run `psum scan` first", file=sys.stderr)
+        print(facts_error(facts_path()), file=sys.stderr)
         return 1
 
     desc_path = descriptions_path()

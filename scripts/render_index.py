@@ -21,7 +21,7 @@ from scripts.paths import (
     descriptions_path, facts_path, index_path, psum_home, state_dir,
 )
 
-from scripts.fsutil import LockBusy, atomic_write, read_json, state_lock
+from scripts.fsutil import LockBusy, atomic_write, facts_error, read_json, state_lock
 from scripts.render_terminal import relative_age
 
 _ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
@@ -217,7 +217,7 @@ def main(argv: list[str]) -> int:
             # snapshot its own run started with.
             facts = read_json(facts_path())
             if facts is None:
-                print("no state/facts.json — run `psum scan` first", file=sys.stderr)
+                print(facts_error(facts_path()), file=sys.stderr)
                 return 1
             rendered = render(
                 facts, load_config(), now=datetime.now().astimezone(),

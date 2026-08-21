@@ -117,3 +117,20 @@ def test_lock_is_reacquirable_after_release(tmp_path):
         pass
     with state_lock(tmp_path, timeout=1):
         pass  # no exception
+
+
+def test_facts_error_distinguishes_missing_from_corrupt(tmp_path):
+    from scripts.fsutil import facts_error
+
+    missing = tmp_path / "facts.json"
+    assert "run `psum scan`" in facts_error(missing)
+
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("{not json")
+    msg = facts_error(corrupt)
+    assert "malformed" in msg
+    # The corrupt message must NOT be the missing message: re-running a scan
+    # is the fix for one and not the other, and a reader who is told the
+    # wrong one loses the time it takes to run scan and get the same error.
+    assert msg != facts_error(missing)
+    assert str(corrupt) in msg

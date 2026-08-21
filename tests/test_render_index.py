@@ -273,6 +273,6 @@ def test_vault_index_name_has_no_whitespace():
     mounts the file as everything up to the space and then reports the source
     as missing -- with a zero exit code, so nothing surfaces the failure.
     """
-    assert " " not in render_index_mod.VAULT_INDEX_NAME
-    assert "\t" not in render_index_mod.VAULT_INDEX_NAME
-    assert render_index_mod.VAULT_INDEX_NAME.endswith(".md")
+    # The whitespace rule now lives with the filenames themselves, in
+    # scripts/paths.py — see test_paths.test_vault_filenames_contain_no_whitespace.
+    assert render_index_mod.vault_index_path().name.endswith(".md")

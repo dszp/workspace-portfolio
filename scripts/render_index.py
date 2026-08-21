@@ -19,19 +19,13 @@ from scripts.config import Config, load_config
 from scripts.descriptions import Description, load_descriptions, project_key
 from scripts.paths import (
     descriptions_path, facts_path, index_path, psum_home, state_dir,
+    vault_index_path,
 )
 
 from scripts.fsutil import LockBusy, atomic_write, facts_error, read_json, state_lock
 from scripts.render_terminal import relative_age
 
 _ENV = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
-
-#: Filename of the phone-mountable copy under `state/vault/`. It must contain
-#: no whitespace: pvault splits each config line on its first whitespace run,
-#: so a vault-path may contain spaces but a SOURCE path may not. Named here
-#: rather than inlined so that rule is asserted by a test instead of learned
-#: again from a mount that silently truncates at the space.
-VAULT_INDEX_NAME = "PORTFOLIO-INDEX.md"
 
 #: Drop everything but word characters, hyphens and spaces, then turn spaces
 #: into hyphens -- the same reduction GitHub and Obsidian both apply when they
@@ -206,7 +200,7 @@ def main(argv: list[str]) -> int:
     # Obsidian's normalizer writing back into a file this repo also treats as
     # its own generated output is exactly the corruption this split avoids.
     # Nothing of value lives in state/vault/ -- the next render overwrites it.
-    vault_index = state_dir() / "vault" / VAULT_INDEX_NAME
+    vault_index = vault_index_path()
     changed = False
     committed = False
     try:

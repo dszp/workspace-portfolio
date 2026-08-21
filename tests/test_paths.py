@@ -52,3 +52,25 @@ def test_a_config_in_psum_home_wins_over_the_shipped_one(tmp_path, monkeypatch):
     own.parent.mkdir(parents=True)
     own.write_text("[settings]\n")
     assert paths.config_path() == own
+
+
+def test_vault_filenames_contain_no_whitespace():
+    # pvault splits each config line on its FIRST whitespace run: a
+    # vault-path may contain spaces but a SOURCE path may not. A space here
+    # mounts a truncated path, reports "skipping missing source", and exits
+    # 0 -- the failure that forced "PORTFOLIO INDEX.md" to be renamed.
+    from scripts.paths import VAULT_DATA_NAME, VAULT_INDEX_NAME
+
+    for name in (VAULT_INDEX_NAME, VAULT_DATA_NAME):
+        assert " " not in name
+        assert "\t" not in name
+        assert name.endswith(".md")
+    assert VAULT_INDEX_NAME != VAULT_DATA_NAME
+
+
+def test_vault_paths_sit_under_psum_home_state(monkeypatch, tmp_path):
+    from scripts import paths
+
+    monkeypatch.setenv(paths.HOME_ENV, str(tmp_path))
+    assert paths.vault_index_path() == tmp_path / "state" / "vault" / paths.VAULT_INDEX_NAME
+    assert paths.vault_data_path() == tmp_path / "state" / "vault" / paths.VAULT_DATA_NAME

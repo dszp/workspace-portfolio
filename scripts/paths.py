@@ -66,3 +66,25 @@ def descriptions_path() -> Path:
 
 def index_path() -> Path:
     return psum_home() / "INDEX.md"
+
+
+#: Filenames of the phone-mountable copies under `state/vault/`. Neither may
+#: contain whitespace: pvault splits each config line on its first whitespace
+#: run, so a vault-path may contain spaces but a SOURCE path may not. A space
+#: here mounts a truncated path, reports "skipping missing source", and exits
+#: 0 -- silently. Named here rather than inlined so the rule is asserted by a
+#: test instead of learned again from a mount that never fires.
+VAULT_INDEX_NAME = "PORTFOLIO-INDEX.md"
+VAULT_DATA_NAME = "PORTFOLIO-DATA.md"
+
+
+def vault_dir() -> Path:
+    return state_dir() / "vault"
+
+
+def vault_index_path() -> Path:
+    return vault_dir() / VAULT_INDEX_NAME
+
+
+def vault_data_path() -> Path:
+    return vault_dir() / VAULT_DATA_NAME

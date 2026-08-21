@@ -243,6 +243,16 @@ folder-mount management, attachment filtering, and the sync-lock handling — is
 None of that is required. `PORTFOLIO-INDEX.md` is a plain markdown file — put it in any vault, any
 static site, any wiki, or read it where it sits.
 
+## The `psum` skill
+
+`skills/psum/` lets an agent answer portfolio questions conversationally —
+"what did I forget about", "what's half-done", "what's left in X".
+
+It probes for a backend: the `psum query` CLI when a shell is available,
+otherwise the exported `PORTFOLIO-DATA.md` / `PORTFOLIO-INDEX.md` notes
+through a connected notes MCP. Install it once at the account level and it
+works on every surface; installing a second local copy only duplicates it.
+
 ## Configuration reference
 
 | Setting | Default | Meaning |
